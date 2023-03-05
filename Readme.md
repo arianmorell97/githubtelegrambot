@@ -30,18 +30,8 @@ in your enviroment `.env` file
 ```js
 BOT_TOKEN = [secret] // Token proporcionado por [Bot](https://t.me/BotFather)
 GITHUB_WEBHOOK_SECRET = [hook_secret] // Secret to Github Webhook
-CHAT_ID_BOT = [chat_id] // ID for chat where send menssages
 WEBHOOK_SERVER_PORT = [port] // Server Port
 ```
-
-## Errors
-
-`githubtelegrambot` bug reports and required changes.
-
-**NOTE**: Error optimization described in point **2.** and **3.** can be disabled by setting `skipCaptchaRequestsOptimization` in configuration to `true` and way of informing about errors described in point **1.**
-can be restored to traditional way by setting `errorDisplayMode` to `'code'`
-
-1. You want it to take the chat id when it is added or belongs to a group
 
 ## Ending speech
 
