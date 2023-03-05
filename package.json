@@ -6,7 +6,7 @@
   "author": "arianmorell97 <arianmorell97@gmail.com>",
   "license": "MIT",
   "scripts": {
-    "dev": "ts-node-dev src/index.ts",
+    "dev": "ts-node-dev --ignore-watch=src/dataConfig.json src/index.ts ",
     "lint": "ts-standard",
     "start": "node ./.build/src/index.js",
     "build": "tsc",
@@ -30,7 +30,8 @@
   },
   "eslintConfig": {
     "rules": {
-      "@typescript-eslint/strict-boolean-expressions": "warn"
+      "@typescript-eslint/strict-boolean-expressions": "warn",
+      "@typescript-eslint/member-delimiter-style": "off"
     },
     "parserOptions": {
       "project": "./tsconfig.json"
