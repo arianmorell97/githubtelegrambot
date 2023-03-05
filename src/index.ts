@@ -1,23 +1,30 @@
-/* eslint-disable @typescript-eslint/explicit-function-return-type */
-/* eslint-disable @typescript-eslint/no-unnecessary-type-assertion */
+/* eslint-disable @typescript-eslint/indent */
 /* eslint-disable @typescript-eslint/restrict-template-expressions */
 import bodyParser from 'body-parser'
-import express from 'express'
-import crypto, { BinaryLike, KeyObject } from 'crypto'
+import express, { RequestHandler } from 'express'
 import { config } from 'dotenv'
 import { Composer, Context, Middleware, Telegraf } from 'telegraf'
 import { telegrafThrottler } from 'telegraf-throttler'
+// import fs from 'fs'
+import { verifyGithubPayload } from './utils/middleware'
+import { issuesActionType, issuesCommentActionType } from './types'
+import { sendCustomMessage } from './utils/customMessage'
+import { DataConfig } from 'env'
 
+// Load .env
 const configEnv = config()
+
 if (configEnv.error != null) {
   throw new Error('ha ocurrido un error al cargar env')
 }
 
 if (configEnv.parsed != null) {
-  console.log('.env loaded')
+  console.log(new Date().toLocaleString(), '.env loaded')
 }
 
 const token = process.env.BOT_TOKEN
+
+export let dataConfig: DataConfig = { id_forum: 0, chat_id: 0 }
 
 // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-assertion
 export const bot = new Telegraf(token as string)
@@ -28,18 +35,12 @@ const groupThrottler = telegrafThrottler({
     // Aggresively drop inbound messages
     highWater: 0, // Trigger strategy if throttler is not ready for a new job
     maxConcurrent: 1, // Only 1 job at a time
-    minTime: 30000 // Wait this many milliseconds to be ready, after a job
+    minTime: 5000 // Wait this many milliseconds to be ready, after a job
   },
-  inKey: 'chat' // Throttle inbound messages by chat.id instead
+  inKey: 'from' // Throttle inbound messages by chat.id instead
 })
 
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-// const customMiddleware: Middleware<Context<Update>> = async (_ctx, _next) =>
-//   false
-
 const partitioningMiddleware: Middleware<Context> = async (ctx, next) => {
-  console.log('ChatId: ', ctx.message?.chat.id)
-
   const chatId = Number(ctx.chat?.id)
   return await Composer.optional(
     () => chatId < 0,
@@ -49,20 +50,49 @@ const partitioningMiddleware: Middleware<Context> = async (ctx, next) => {
 }
 bot.use(partitioningMiddleware)
 
-bot.command('/example', (ctx) => {
-  void ctx.reply('I am seriously throttled!')
+bot.command('/notifyhere', async (ctx) => {
+  const chat = await ctx.getChat()
+
+  const isChatAdmins = (await ctx.getChatAdministrators()).find(
+    (admin) => admin.user.username === ctx.from.username
+  )
+  if (chat.type !== 'supergroup') {
+    void ctx.reply('este comando solo se puede usar en supergrupos')
+  }
+  if (isChatAdmins === undefined) {
+    void ctx.reply(
+      'No inventes! Solo los administradores del grupo pueden usar este comando'
+    )
+  }
+
+  if (
+    (isChatAdmins !== undefined && chat.type === 'supergroup') ||
+    chat.type === 'group'
+  ) {
+    const newDataConfig = {
+      ...dataConfig,
+      id_forum:
+        ctx.update.message.message_thread_id != null
+          ? ctx.update.message.message_thread_id
+          : 0,
+      chat_id: chat.id
+    }
+    dataConfig = newDataConfig
+    console.log(new Date().toLocaleString(), dataConfig)
+    void ctx.reply('Se actualizó correctamente la configuración')
+  }
 })
 
-// bot.telegram.sendMessage()
-
 void bot.telegram.setMyCommands([
-  { command: 'example', description: 'comando de ejemplo' }
+  {
+    command: 'notifyhere',
+    description: 'El Bot notificara en este chat.'
+  }
 ])
 
 void bot.launch()
 
-// console.log(crypto.randomBytes(32).toString('hex'))
-
+// Below start webhook server
 const app = express()
 
 app.use(bodyParser.json())
@@ -70,63 +100,33 @@ app.use(bodyParser.json())
 const PORT = process.env.WEBHOOK_SERVER_PORT
 
 app.listen(PORT, () => {
-  // bot.telegram.chat
-  console.log(`Server running on port ${PORT}`)
+  console.log(new Date().toLocaleString(), `Server running on port ${PORT}`)
 })
 
-const createComparisonSignature = (body: any) => {
-  const hmac = crypto.createHmac(
-    'sha1',
-
-    process.env.OCTO_WIZARD_HOOK_SECRET as BinaryLike | KeyObject
-  )
-
-  const selfSignature = hmac.update(JSON.stringify(body)).digest('hex')
-  return `sha1=${selfSignature}` // shape in GitHub header
-}
-
-const compareSignatures = (signature: any, comparisonSsignature: any) => {
-  const source = Buffer.from(signature)
-  const comparison = Buffer.from(comparisonSsignature)
-
-  return crypto.timingSafeEqual(source, comparison) // constant time comparison
-}
-
-const verifyGithubPayload = (req: any, res: any, next: any): void => {
-  const { headers, body } = req
-
-  const signature = headers['x-hub-signature']
-  const comparisonSsignature = createComparisonSignature(body)
-
-  if (!compareSignatures(signature, comparisonSsignature)) {
-    return res.status(401).send('Mismatched signatures')
+// eslint-disable-next-line @typescript-eslint/explicit-function-return-type
+const eventsHandler: RequestHandler = (req, res) => {
+  console.log(new Date().toLocaleString(), dataConfig)
+  if (dataConfig.chat_id === 0) {
+    console.error('No se ha inicializado la configuración')
+    return res.status(400).send('No se ha inicializado la configuración')
   }
+  console.log(new Date().toLocaleString(), req.event_type, req.action)
 
-  const { action, ...payload } = body
-  req.event_type = headers['x-github-event'] // one of: https://developer.github.com/v3/activity/events/types/
-  req.action = action
-  req.payload = payload
-  next()
-}
-
-const eventsHandler = (req: any, res: any): void => {
-  console.log(req.event_type, req.action)
-
-  // console.log(JSON.stringify(req.payload, null, 2))
+  // console.log(new Date().toLocaleString(),JSON.stringify(req.payload, null, 2))
 
   const { payload } = req
-  // console.log(payload.action)
-  // console.log(payload.user)
-
+  console.log(
+    new Date().toLocaleString(),
+    `Evento: ${req.event_type}, Acción: ${req.action}`
+  )
   if (req.event_type === 'issues') {
     // Get the relevant properties
-    const action: keyof typeof issuesActionType = req.action
+    const action = req.action as keyof typeof issuesActionType
     const issue = payload.issue
     const user = payload.sender
     const labels = issue.labels
 
     // Format the message
-    // [inline URL](http://www.example.com/)
     try {
       let message = `El issue <a href="${issue.html_url}">#${issue.number} ${
         issue.title
@@ -147,33 +147,23 @@ const eventsHandler = (req: any, res: any): void => {
       }
       message += `\nDescripción: \n${issue.body}.`
 
-      void bot.telegram.sendMessage(
-        process.env.CHAT_ID_BOT as string | number,
-        message,
-        {
-          parse_mode: 'HTML'
-        }
-      )
-      console.log(message)
+      sendCustomMessage(message)
+      // console.log(new Date().toLocaleString(),message)
     } catch (error) {
       console.error(error)
-      void bot.telegram.sendMessage(
-        process.env.CHAT_ID_BOT as string | number,
-        'Algo ha salido mal con el Webhook',
-        {
-          parse_mode: 'HTML'
-        }
-      )
+      sendCustomMessage('Algo ha salido mal con el Webhook')
     }
   }
 
   if (req.event_type === 'issue_comment') {
-    const action: keyof typeof issuesCommentActionType = req.action
+    // Get the relevant properties
+    const action = req.action
     const issue = payload.issue
     const user = payload.sender
     const editedComment = action === 'edited' ? payload.changes.body.from : null
     const comment = action !== 'edited' ? payload.comment.body : null
 
+    // Format the message
     try {
       let message = `El usuario ${user.login} ha ${
         // eslint-disable-next-line @typescript-eslint/strict-boolean-expressions
@@ -190,50 +180,14 @@ const eventsHandler = (req: any, res: any): void => {
       }
       // message += `\nDescripción: \n${issue.body}.`
 
-      void bot.telegram.sendMessage(
-        process.env.CHAT_ID_BOT as string | number,
-        message,
-        {
-          parse_mode: 'HTML'
-        }
-      )
-      console.log(message)
+      sendCustomMessage(message)
+      // console.log(new Date().toLocaleString(),message)
     } catch (error) {
       console.error(error)
-      void bot.telegram.sendMessage(
-        process.env.CHAT_ID_BOT as string | number,
-        'Algo ha salido mal con el Webhook',
-        {
-          parse_mode: 'HTML'
-        }
-      )
+      sendCustomMessage('Algo ha salido mal con el Webhook')
     }
   }
   return res.send('ok')
 }
 
 app.use('/', verifyGithubPayload, eventsHandler)
-
-export enum issuesCommentActionType {
-  created = 'creado',
-  deleted = 'eliminado',
-  edited = 'editado'
-}
-
-export enum issuesActionType {
-  assigned = 'asignado',
-  closed = 'cerrado',
-  deleted = 'eliminado',
-  demilestoned = 'desmarcado como hito',
-  edited = 'editado',
-  labeled = 'etiquetado',
-  locked = 'bloqueado',
-  milestoned = 'marcado como hito',
-  opened = 'abierto',
-  pinned = 'anclado',
-  transferred = 'transferido',
-  unassigned = 'desasignado',
-  unlabeled = 'desetiquetado',
-  unlocked = 'desbloqueado',
-  unpinned = 'desfijado'
-}

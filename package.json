@@ -6,9 +6,9 @@
   "author": "arianmorell97 <arianmorell97@gmail.com>",
   "license": "MIT",
   "scripts": {
-    "dev": "ts-node-dev src/index.ts",
+    "dev": "ts-node-dev src/index.ts ",
     "lint": "ts-standard",
-    "start": "node ./.build/src/index.js",
+    "start": "node ./.build/index.js",
     "build": "tsc",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
@@ -30,7 +30,8 @@
   },
   "eslintConfig": {
     "rules": {
-      "@typescript-eslint/strict-boolean-expressions": "warn"
+      "@typescript-eslint/strict-boolean-expressions": "warn",
+      "@typescript-eslint/member-delimiter-style": "off"
     },
     "parserOptions": {
       "project": "./tsconfig.json"
