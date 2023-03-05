@@ -18,7 +18,7 @@ This library provides a simple server with the responsibility of notifying Githu
 
 ## Features
 
--
+- Notify about all events related to issues
 
 ## Configuration
 
