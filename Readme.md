@@ -28,7 +28,7 @@ Default options with all properties explained:
 <br>in your enviroment `.env` file
 
 ```js
-BOT_TOKEN = [secret] // Token proporcionado por [Bot](https://t.me/BotFather)
+BOT_TOKEN = [secret] // Token provided by [Bot](https://t.me/BotFather)
 GITHUB_WEBHOOK_SECRET = [hook_secret] // Secret to Github Webhook
 WEBHOOK_SERVER_PORT = [port] // Server Port
 ```
