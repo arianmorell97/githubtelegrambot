@@ -25,7 +25,7 @@ This library provides a simple server with the responsibility of notifying Githu
 Configuration is done by passing options object as second `withHCaptcha` function call argument.
 
 Default options with all properties explained:
-in your enviroment `.env` file
+<br>in your enviroment `.env` file
 
 ```js
 BOT_TOKEN = [secret] // Token proporcionado por [Bot](https://t.me/BotFather)
